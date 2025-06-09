@@ -138,6 +138,7 @@ int main(int argc, char **argd){
 	}
 	printf("Received %d bytes\n", transferred);
 	hexdump(in_packet,(size_t)transferred);
+	free(in_packet);
 
 	libusb_close(programmer_handle);
 	libusb_exit(usb_context);
