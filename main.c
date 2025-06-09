@@ -1,8 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <libusb-1.0/libusb.h>
 
+////////// PROGRAM CONSTANTS ///////////
+#define VERSION "v0.0-dev"
+
+/////////// USB CONSTANTS //////////////
 #define VENDOR_ID  0xd369
 #define PRODUCT_ID 0x0008
 
@@ -29,7 +34,46 @@ void hexdump(uint8_t *data,size_t size){
 	}
 }
 
-int main(int argc, char **argv){
+void help(char* progname){
+	printf(
+			"Usage: %s [options]  \n"
+			"Options:\n"
+			"  -v                        Print the program version and exit successfully\n"
+			"  -h                        Print this help message and exit successfully\n"
+			"  -q                        Query for the chip ID\n"
+			, progname);
+}
+
+enum ACTION {NOTHING,ID_READ,TEST_READ,READ};
+
+int main(int argc, char **argd){
+
+	enum ACTION action=NOTHING;
+
+	int opt;
+	while ((opt = getopt(argc, argd, "vhq")) != -1) {
+		switch (opt) {
+			case 'v':
+				printf("%s\n",VERSION);
+				return 0;
+			case 'q':
+				action=ID_READ;
+				break;
+			case 'h':
+				help(argd[0]);
+				return 0;
+				break;
+			default:
+				help(argd[0]);
+				return 1;
+		}
+	}
+
+	if(action!=ID_READ){
+		printf("Nothing to do, exiting\n");
+		return 0;
+	}
+
 	libusb_device_handle *programmer_handle;
 	libusb_context *usb_context = NULL;
 	int libusb_ret;
