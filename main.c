@@ -2,20 +2,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <libusb-1.0/libusb.h>
+#include "usb_com.h"
 
-////////// PROGRAM CONSTANTS ///////////
 #define VERSION "v0.0-dev"
-
-/////////// USB CONSTANTS //////////////
-#define VENDOR_ID  0xd369
-#define PRODUCT_ID 0x0008
-
-#define ENDPOINT_OUT 0x01
-#define ENDPOINT_IN  0x81
-#define INTERFACE_NUM   0
-
-#define USB_TIMEOUT_IN_MILLIS 1000000000
 
 void hexdump(uint8_t *data,size_t size){
 	char ascii[17]={' '};
@@ -74,73 +63,28 @@ int main(int argc, char **argd){
 		return 0;
 	}
 
-	libusb_device_handle *programmer_handle;
-	libusb_context *usb_context = NULL;
-	int libusb_ret;
-
-	libusb_ret=libusb_init_context(&usb_context,NULL,0);
-	if(libusb_ret){
-		fprintf(stderr, "Error init libusb: %s\n", libusb_error_name(libusb_ret));
-		return -1;
+	struct programmer_t *programmer=connect_to_programmer();
+	if ( !programmer ){
+		fprintf(stderr,"Couldn't connect to IP BOX\n");
+		return 1;
 	}
 
-	programmer_handle=libusb_open_device_with_vid_pid(NULL,VENDOR_ID,PRODUCT_ID);
-	if(programmer_handle==NULL){
-		fprintf(stderr,"Error finding programmer\n");
-		libusb_exit(usb_context);
-		return -1;
+	struct chip_id_t *chip_id=read_chip_id(programmer);
+	if( !chip_id ){
+		close_programmer(programmer);
+		return 1;
 	}
 
-	if (libusb_kernel_driver_active(programmer_handle, INTERFACE_NUM) == 1) {
-		libusb_detach_kernel_driver(programmer_handle, INTERFACE_NUM);
-	}
+	printf(
+			"Nand ID          : 0x%012lX\n"
+			"Nand extended ID : 0x%012lX\n"
+			"Nand information : %s\n",
+			chip_id->nand_id,
+			chip_id->nand_extended_id,
+			chip_id->nand_information
+			);
 
-	libusb_ret=libusb_claim_interface(programmer_handle, INTERFACE_NUM);
-	if(libusb_ret){
-		fprintf(stderr, "Cannot claim interface: %s\n", libusb_error_name(libusb_ret));
-		libusb_close(programmer_handle);
-		libusb_exit(usb_context);
-		return EXIT_FAILURE;
-	}
-
-	uint8_t id_request_packet[128]={ 0x52,0x44,0x49,0x44,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x01,0x4a,0x01,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x00};
-	int transferred;
-	libusb_ret=libusb_bulk_transfer(programmer_handle, ENDPOINT_OUT, id_request_packet, sizeof(id_request_packet), &transferred, USB_TIMEOUT_IN_MILLIS);
-	if (libusb_ret||transferred!=sizeof(id_request_packet)){
-		fprintf(stderr, "Cannot claim interface: %s\n", libusb_error_name(libusb_ret));
-		libusb_close(programmer_handle);
-		libusb_exit(usb_context);
-		return EXIT_FAILURE;
-	}
-
-	uint8_t *in_packet=malloc(1024*1024);
-	libusb_ret = libusb_bulk_transfer(programmer_handle, ENDPOINT_IN, in_packet, 1024*1024, &transferred, USB_TIMEOUT_IN_MILLIS);
-	if (libusb_ret){
-		fprintf(stderr, "Error receiving data: %s\n", libusb_error_name(libusb_ret));
-		libusb_close(programmer_handle);
-		libusb_exit(usb_context);
-		return EXIT_FAILURE;
-	}
-	printf("Received %d bytes\n", transferred);
-	hexdump(in_packet,(size_t)transferred);
-	free(in_packet);
-
-	libusb_close(programmer_handle);
-	libusb_exit(usb_context);
+	free_chip_id(chip_id);
+	close_programmer(programmer);
 	return 0;
 }
