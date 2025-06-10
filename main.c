@@ -6,6 +6,16 @@
 
 #define VERSION "v0.0-dev"
 
+#define TERM_BLACK   "\e[0;30m"
+#define TERM_RED     "\e[0;31m"
+#define TERM_GREEN   "\e[0;32m"
+#define TERM_YELLOW  "\e[0;33m"
+#define TERM_BLUE    "\e[0;34m"
+#define TERM_MAGENTA "\e[0;35m"
+#define TERM_CYAN    "\e[0;36m"
+#define TERM_WHITE   "\e[0;37m"
+#define TERM_RESET   "\e[0m"
+
 void hexdump(uint8_t *data,size_t size){
 	char ascii[17]={' '};
 	ascii[16]=0;
@@ -76,9 +86,10 @@ int main(int argc, char **argd){
 	}
 
 	printf(
-			"Nand ID          : 0x%012lX\n"
-			"Nand extended ID : 0x%012lX\n"
-			"Nand information : %s\n",
+			TERM_BLUE "# Got from NAND directly\n"
+			TERM_YELLOW "    Nand ID          :" TERM_GREEN " 0x%012lX\n"
+			TERM_YELLOW "    Nand extended ID :" TERM_GREEN " 0x%012lX\n"
+			TERM_YELLOW "    Nand information :" TERM_GREEN " %s" TERM_RESET "\n",
 			chip_id->nand_id,
 			chip_id->nand_extended_id,
 			chip_id->nand_information
