@@ -28,6 +28,7 @@ int _error_(char* filename,int line,const char *format, ...){
 		va_end(args);
 	    return 1;
 	}
+	fflush(stderr);
 
 	va_end(args);
 	return 0;
@@ -66,6 +67,7 @@ void term_info(const char* format, ...){
 	printf( TERM_BLUE );
 	vprintf(format,args);
 	printf( TERM_RESET );
+	fflush(stdout); // Hit what might be a bug where stderr was printed right after this and the color was still blue
 
 	va_end(args);
 }
