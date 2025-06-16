@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "usb_com.h"
+#include "term_io.h"
 
 /////////// USB CONSTANTS //////////////
 #define VENDOR_ID  0xd369
@@ -26,14 +27,14 @@ struct programmer_t *connect_to_programmer(){
 
 	libusb_ret=libusb_init_context(&ret->usb_context,NULL,0);
 	if(libusb_ret){
-		fprintf(stderr, "Error init libusb: %s\n", libusb_error_name(libusb_ret));
+		error_args("Error init libusb: %s", libusb_error_name(libusb_ret));
 		free(ret);
 		return NULL;
 	}
 
 	ret->programmer_handle=libusb_open_device_with_vid_pid(NULL,VENDOR_ID,PRODUCT_ID);
 	if(ret->programmer_handle==NULL){
-		fprintf(stderr,"Error finding programmer\n");
+		error("Error finding programmer");
 		libusb_exit(ret->usb_context);
 		free(ret);
 		return NULL;
@@ -45,7 +46,7 @@ struct programmer_t *connect_to_programmer(){
 
 	libusb_ret=libusb_claim_interface(ret->programmer_handle, INTERFACE_NUM);
 	if(libusb_ret){
-		fprintf(stderr, "Cannot claim interface: %s\n", libusb_error_name(libusb_ret));
+		error_args("Cannot claim interface: %s", libusb_error_name(libusb_ret));
 		libusb_close(ret->programmer_handle);
 		libusb_exit(ret->usb_context);
 		free(ret);
@@ -77,7 +78,7 @@ int usb_send_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
 	int libusb_ret, transferred;
 	libusb_ret=libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_OUT, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
 	if (libusb_ret||transferred!=(int)size){
-		fprintf(stderr, "Cannot send on interface: %s\n", libusb_error_name(libusb_ret));
+		error_args("Cannot send on interface: %s", libusb_error_name(libusb_ret));
 		return 1;
 	}
 	return 0;
@@ -92,7 +93,7 @@ int usb_receive_bulk(struct programmer_t *programmer,uint8_t* packet, size_t siz
 	int libusb_ret, transferred;
 	libusb_ret = libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_IN, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
 	if (libusb_ret){
-		fprintf(stderr, "Error receiving data: %s\n", libusb_error_name(libusb_ret));
+		error_args("Error receiving data: %s", libusb_error_name(libusb_ret));
 		return -1;
 	}
 	return transferred;
@@ -138,7 +139,7 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	}
 
 	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'){
-		fprintf(stderr, "Programmer didn't send expected data\n");
+		error("Programmer didn't send expected data");
 		free(in_packet);
 		free(ret);
 		return NULL;
@@ -195,7 +196,7 @@ int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t addres
 	}
 
 	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'||size!=512+128){
-		fprintf(stderr, "Programmer didn't send expected data\n");
+		error("Programmer didn't send expected data");
 		free(in_packet);
 		return 1;
 	}

@@ -1,3 +1,5 @@
+#ifndef _USB_COM_H_
+#define _USB_COM_H_
 #include <libusb-1.0/libusb.h>
 
 struct programmer_t{
@@ -17,3 +19,4 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer);
 void free_chip_id(struct chip_id_t *tofree);
 void close_programmer(struct programmer_t *tofree);
 int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t address);
+#endif

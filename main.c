@@ -3,35 +3,9 @@
 #include <stdint.h>
 #include <unistd.h>
 #include "usb_com.h"
+#include "term_io.h"
 
 #define VERSION "v0.0-dev"
-
-#define TERM_BLACK   "\e[0;30m"
-#define TERM_RED     "\e[0;31m"
-#define TERM_GREEN   "\e[0;32m"
-#define TERM_YELLOW  "\e[0;33m"
-#define TERM_BLUE    "\e[0;34m"
-#define TERM_MAGENTA "\e[0;35m"
-#define TERM_CYAN    "\e[0;36m"
-#define TERM_WHITE   "\e[0;37m"
-#define TERM_RESET   "\e[0m"
-
-void hexdump(uint8_t *data,size_t size){
-	char ascii[17]={' '};
-	ascii[16]=0;
-	for (unsigned int i=0;i<size;i++){
-		printf("%02X ",data[i]);
-		if((data[i]>='a'&&data[i]<='z')||(data[i]>='A'&&data[i]<='Z')||(data[i]>='0'&&data[i]<='9'))
-			ascii[i%16]=data[i];
-		else
-			ascii[i%16]='.';
-		if((i%16)==15){
-			printf(" | %s\n",ascii);
-			for(int i=0;i<16;i++)
-				ascii[i]=' ';
-		}
-	}
-}
 
 void help(char* progname){
 	printf(
@@ -79,7 +53,7 @@ int main(int argc, char **argd){
 
 	struct programmer_t *programmer=connect_to_programmer();
 	if ( !programmer ){
-		fprintf(stderr,"Couldn't connect to IP BOX\n");
+		printf("Couldn't connect to IP BOX\n");
 		return 1;
 	}
 
@@ -89,24 +63,17 @@ int main(int argc, char **argd){
 		return 1;
 	}
 
-	printf(
-			TERM_BLUE "# Got from NAND directly\n"
-			TERM_YELLOW "    Nand ID          :" TERM_GREEN " 0x%012lX\n"
-			TERM_YELLOW "    Nand extended ID :" TERM_GREEN " 0x%012lX\n"
-			TERM_YELLOW "    Nand information :" TERM_GREEN " %s" TERM_RESET "\n",
-			chip_id->nand_id,
-			chip_id->nand_extended_id,
-			chip_id->nand_information
-			);
+	term_info("#Got from NAND directly\n");
+	term_chip_data(chip_id);
 
 	if ( action == TEST_READ ){
 		uint64_t address=0;
 		uint8_t *data=malloc(8192);
 		if(read_chip_page(programmer,data,address)){
-			printf(TERM_BLUE "# Read failed\n");
+			term_info("# Read failed\n");
 		}else{
-			printf(TERM_BLUE "# Read succeeded\n"TERM_RESET);
-			hexdump(data,512);
+			term_info("# Read succeeded\n");
+			term_hexdump(data,512);
 		}
 		free(data);
 	}

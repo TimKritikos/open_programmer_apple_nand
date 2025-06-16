@@ -5,7 +5,7 @@ CC=gcc
 CFLAGS+=-Werror -g -fsanitize=address,undefined
 LDFLAGS+=-fsanitize=address,undefined
 
-opan: main.o usb_com.o
+opan: main.o usb_com.o term_io.o
 	${CC} ${LDFLAGS} $^ -o $@
 
 %.o: %.c
