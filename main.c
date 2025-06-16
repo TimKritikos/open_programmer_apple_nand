@@ -40,6 +40,7 @@ void help(char* progname){
 			"  -v                        Print the program version and exit successfully\n"
 			"  -h                        Print this help message and exit successfully\n"
 			"  -q                        Query for the chip ID\n"
+			"  -t                        Perform read test\n"
 			, progname);
 }
 
@@ -50,7 +51,7 @@ int main(int argc, char **argd){
 	enum ACTION action=NOTHING;
 
 	int opt;
-	while ((opt = getopt(argc, argd, "vhq")) != -1) {
+	while ((opt = getopt(argc, argd, "vhqt")) != -1) {
 		switch (opt) {
 			case 'v':
 				printf("%s\n",VERSION);
@@ -62,13 +63,16 @@ int main(int argc, char **argd){
 				help(argd[0]);
 				return 0;
 				break;
+			case 't':
+				action=TEST_READ;
+				break;
 			default:
 				help(argd[0]);
 				return 1;
 		}
 	}
 
-	if(action!=ID_READ){
+	if(action==NOTHING){
 		printf("Nothing to do, exiting\n");
 		return 0;
 	}
@@ -94,6 +98,18 @@ int main(int argc, char **argd){
 			chip_id->nand_extended_id,
 			chip_id->nand_information
 			);
+
+	if ( action == TEST_READ ){
+		uint64_t address=0;
+		uint8_t *data=malloc(8192);
+		if(read_chip_page(programmer,data,address)){
+			printf(TERM_BLUE "# Read failed\n");
+		}else{
+			printf(TERM_BLUE "# Read succeeded\n"TERM_RESET);
+			hexdump(data,512);
+		}
+		free(data);
+	}
 
 	free_chip_id(chip_id);
 	close_programmer(programmer);

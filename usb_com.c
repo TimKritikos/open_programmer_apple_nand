@@ -12,7 +12,7 @@
 #define ENDPOINT_IN  0x81
 #define INTERFACE_NUM   0
 
-#define USB_TIMEOUT_IN_MILLIS 1000000000
+#define USB_TIMEOUT_IN_MILLIS 8000
 
 struct programmer_t *connect_to_programmer(){
 
@@ -63,11 +63,30 @@ uint64_t read_six_bytes(uint8_t *pointer){
 		(uint64_t)pointer[5];
 }
 
+int usb_send_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
+	int libusb_ret, transferred;
+	libusb_ret=libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_OUT, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
+	if (libusb_ret||transferred!=(int)size){
+		fprintf(stderr, "Cannot send on interface: %s\n", libusb_error_name(libusb_ret));
+		return 1;
+	}
+	return 0;
+}
+
+int usb_receive_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
+	int libusb_ret, transferred;
+	libusb_ret = libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_IN, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
+	if (libusb_ret){
+		fprintf(stderr, "Error receiving data: %s\n", libusb_error_name(libusb_ret));
+		return 0;
+	}
+	return transferred;
+}
+
 struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 
 	struct chip_id_t *ret=malloc(sizeof(struct chip_id_t));
 
-	int libusb_ret;
 	uint8_t id_request_packet[128]={ 0x52,0x44,0x49,0x44,0x00,0x00,0x00,0x00,
 	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 	                                 0x00,0x00,0x00,0x01,0x4a,0x01,0x00,0x00,
@@ -85,25 +104,23 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 	                                 0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x00};
 
-	int transferred;
-	libusb_ret=libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_OUT, id_request_packet, sizeof(id_request_packet), &transferred, USB_TIMEOUT_IN_MILLIS);
-	if (libusb_ret||transferred!=sizeof(id_request_packet)){
-		fprintf(stderr, "Cannot send on interface: %s\n", libusb_error_name(libusb_ret));
+
+	if(usb_send_bulk(programmer,id_request_packet,sizeof(id_request_packet))){
 		free(ret);
 		return NULL;
 	}
 
 	uint8_t *in_packet=malloc(1024*1024);
-	libusb_ret = libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_IN, in_packet, 1024*1024, &transferred, USB_TIMEOUT_IN_MILLIS);
-	if (libusb_ret){
-		fprintf(stderr, "Error receiving data: %s\n", libusb_error_name(libusb_ret));
+
+	int size;
+	if(!(size=usb_receive_bulk(programmer,in_packet,1024*1024))){
 		free(in_packet);
 		free(ret);
 		return NULL;
 	}
 
 	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'){
-		fprintf(stderr, "Programmer didn't send valid data\n");
+		fprintf(stderr, "Programmer didn't send expected data\n");
 		free(in_packet);
 		free(ret);
 		return NULL;
@@ -121,6 +138,52 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	free(in_packet);
 	return ret;
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t address){
+
+	uint8_t read_packet[155]={ 0x52,0x45,0x41,0x44,0x00,0x00,0x00,0x00,
+		                   0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,
+	                           0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+
+	if(usb_send_bulk(programmer,read_packet,sizeof(read_packet)))
+		return 1;
+
+	uint8_t *in_packet=malloc(1024*1024);
+
+	int size;
+	if(!(size=usb_receive_bulk(programmer,in_packet,1024*1024))){
+		free(in_packet);
+		return 1;
+	}
+
+	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'||size!=512+128){
+		fprintf(stderr, "Programmer didn't send expected data\n");
+		free(in_packet);
+		return 1;
+	}
+
+	for(int i=0;i<512;i++)
+		data[i]=in_packet[i+128];
+
+	free(in_packet);
+	return 0;
+}
+#pragma GCC diagnostic pop
 
 void free_chip_id(struct chip_id_t *tofree){
 	free(tofree->nand_information);
