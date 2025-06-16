@@ -14,6 +14,8 @@
 
 #define USB_TIMEOUT_IN_MILLIS 8000
 
+// connect_to_programmer - Establish a connection to the USB programmer
+// (return)   : NULL on failure, a pointer to a struct programmer_t on success
 struct programmer_t *connect_to_programmer(){
 
 	struct programmer_t *ret = malloc(sizeof(struct programmer_t));
@@ -54,6 +56,9 @@ struct programmer_t *connect_to_programmer(){
 }
 
 
+// read_six_bytes - Read size bytes in big endian and return the data as a uint64_t
+// pointer    : The pointer to the six bytes that need to be converted
+// (return)   : The converted data
 uint64_t read_six_bytes(uint8_t *pointer){
 	return	(uint64_t)pointer[0]<<40|
 		(uint64_t)pointer[1]<<32|
@@ -63,6 +68,11 @@ uint64_t read_six_bytes(uint8_t *pointer){
 		(uint64_t)pointer[5];
 }
 
+// usb_send_bulk - Send usb data in bulk mode
+// programmer : A pointer to a connected programmer
+// packet     : A pointer to where to read the data from
+// size       : The size of data to send over USB
+// (return)   : 1 for failure, 0 for success
 int usb_send_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
 	int libusb_ret, transferred;
 	libusb_ret=libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_OUT, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
@@ -73,16 +83,24 @@ int usb_send_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
 	return 0;
 }
 
+// usb_receive_bulk - Read usb data in bulk mode
+// programmer : A pointer to a connected programmer
+// packet     : A pointer to where to write the data to
+// size       : The size of data alocated to packet
+// (return)   : -1 on failure, a non negative value on success representing the amount of data read
 int usb_receive_bulk(struct programmer_t *programmer,uint8_t* packet, size_t size){
 	int libusb_ret, transferred;
 	libusb_ret = libusb_bulk_transfer(programmer->programmer_handle, ENDPOINT_IN, packet, size, &transferred, USB_TIMEOUT_IN_MILLIS);
 	if (libusb_ret){
 		fprintf(stderr, "Error receiving data: %s\n", libusb_error_name(libusb_ret));
-		return 0;
+		return -1;
 	}
 	return transferred;
 }
 
+// read_chip_id - Read the reported chip id from the programmer
+// programmer : A pointer to a connected programmer
+// (return)   : NULL on failure, a pointer to a struct chip_id_t on success
 struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 
 	struct chip_id_t *ret=malloc(sizeof(struct chip_id_t));
@@ -113,7 +131,7 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	uint8_t *in_packet=malloc(1024*1024);
 
 	int size;
-	if(!(size=usb_receive_bulk(programmer,in_packet,1024*1024))){
+	if((size=usb_receive_bulk(programmer,in_packet,1024*1024))<0){
 		free(in_packet);
 		free(ret);
 		return NULL;
@@ -139,6 +157,11 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	return ret;
 }
 
+// read_chip_page - Read a page of the NAND memory (not sure if this is actually a page at the moment)
+// programmer : A pointer to a connected programmer
+// data       : A pointer to where to write the data. *THIS NEEDS TO BE AT LEAST 512*
+// address    : The addess of the page to be read
+// (return)   : 1 on failure, 0 on success
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t address){
@@ -185,11 +208,15 @@ int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t addres
 }
 #pragma GCC diagnostic pop
 
+// free_chip_id - Free a struct chip_id_t
+// tofree     : A pointer to a struct chip_id_t to be freed
 void free_chip_id(struct chip_id_t *tofree){
 	free(tofree->nand_information);
 	free(tofree);
 }
 
+// close_programmer - Close the connection to a programmer and free assoisated data
+// tofree     : A pointer to a struct programmer_t to be closed and freed
 void close_programmer(struct programmer_t *tofree){
 	libusb_close(tofree->programmer_handle);
 	libusb_exit(tofree->usb_context);
