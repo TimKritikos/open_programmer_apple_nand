@@ -68,12 +68,12 @@ int main(int argc, char **argd){
 
 	if ( action == TEST_READ ){
 		uint64_t address=0;
-		uint8_t *data=malloc(8192);
-		if(read_chip_page(programmer,data,address)){
+		uint8_t *data=malloc(256);
+		if(read_chip(programmer,data,address)){
 			term_info("# Read failed\n");
 		}else{
 			term_info("# Read succeeded\n");
-			term_hexdump(data,512);
+			term_hexdump(data,256);
 		}
 		free(data);
 	}

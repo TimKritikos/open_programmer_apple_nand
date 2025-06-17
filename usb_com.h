@@ -18,5 +18,5 @@ struct programmer_t *connect_to_programmer();
 struct chip_id_t *read_chip_id(struct programmer_t *programmer);
 void free_chip_id(struct chip_id_t *tofree);
 void close_programmer(struct programmer_t *tofree);
-int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t address);
+int read_chip(struct programmer_t *programmer,uint8_t *data,uint64_t address);
 #endif

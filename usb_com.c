@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "usb_com.h"
 #include "term_io.h"
+#include <assert.h>
 
 /////////// USB CONSTANTS //////////////
 #define VENDOR_ID  0xd369
@@ -158,53 +159,56 @@ struct chip_id_t *read_chip_id(struct programmer_t *programmer){
 	return ret;
 }
 
-// read_chip_page - Read a page of the NAND memory (not sure if this is actually a page at the moment)
+struct read_command_packet_t{
+	char command[8];
+	uint32_t address;
+	uint16_t size; // in  bytes
+	uint8_t unkown_byte1;
+	uint8_t unkown_byte2;
+	uint8_t unkown_byte3;
+	uint8_t boolean2;
+	uint8_t boolean3;
+	char unkown[109];
+};
+static_assert(sizeof(struct read_command_packet_t) == 128, "Struct read_command_packet_t needs to be 128 bytes");
+
+// read_chip - Read data from the NAND memory
 // programmer : A pointer to a connected programmer
 // data       : A pointer to where to write the data. *THIS NEEDS TO BE AT LEAST 512*
 // address    : The addess of the page to be read
 // (return)   : 1 on failure, 0 on success
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-int read_chip_page(struct programmer_t *programmer,uint8_t *data,uint64_t address){
+int read_chip(struct programmer_t *programmer,uint8_t *data,uint64_t address){
+	struct read_command_packet_t *read_packet=malloc(sizeof(struct read_command_packet_t));
+	memset(read_packet,0,sizeof(struct read_command_packet_t));
+	memcpy(read_packet->command,"READ",4);
+	read_packet->address=address;
+	read_packet->size=256;
+	read_packet->unkown_byte3=2;
 
-	uint8_t read_packet[155]={ 0x52,0x45,0x41,0x44,0x00,0x00,0x00,0x00,
-		                   0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,
-	                           0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-	                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-				   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-
-	if(usb_send_bulk(programmer,read_packet,sizeof(read_packet)))
+	if(usb_send_bulk(programmer,(uint8_t*)read_packet,sizeof(struct read_command_packet_t)))
 		return 1;
 
 	uint8_t *in_packet=malloc(1024*1024);
-
 	int size;
+
 	if(!(size=usb_receive_bulk(programmer,in_packet,1024*1024))){
 		free(in_packet);
+		free(read_packet);
 		return 1;
 	}
 
-	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'||size!=512+128){
+	if(in_packet[0]!='O'||in_packet[1]!='K'||in_packet[2]!='A'||in_packet[3]!='Y'||size!=128+read_packet->size){
 		error("Programmer didn't send expected data");
 		free(in_packet);
+		free(read_packet);
 		return 1;
 	}
 
-	for(int i=0;i<512;i++)
-		data[i]=in_packet[i+128];
+	#define maximum_buffer_size 256
+	memcpy(data,in_packet+128,read_packet->size>maximum_buffer_size?maximum_buffer_size:read_packet->size);
 
 	free(in_packet);
+	free(read_packet);
 	return 0;
 }
 #pragma GCC diagnostic pop
